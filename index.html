@@ -1,0 +1,224 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Códigos de Barras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+</head>
+<body class="flex flex-col min-h-screen bg-gray-50">
+    <!-- Cabeçalho -->
+    <header class="w-full bg-gradient-to-r from-blue-700 to-blue-900 text-white py-6 shadow-lg">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div>
+                <img src="https://www.imile.com/images/logos/Christmas_logo_White.svg" alt="Logo" class="h-16 w-auto hover:scale-105 transition-transform">
+            </div>
+            <nav class="space-x-6">
+                <a href="#home" class="hover:text-gray-200 transition"></a>
+                <a href="#sobre" class="hover:text-gray-200 transition"></a>
+                <a href="#contato" class="hover:text-gray-200 transition"></a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="container mx-auto px-4 py-8 flex-grow flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Gerador de Códigos de Barras</h1>
+        <textarea id="codesInput" placeholder="Digite os números dos códigos de barras, um por linha" class="w-full md:w-3/4 lg:w-1/2 h-64 p-4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"></textarea>
+        <button onclick="startBarcodeGeneration()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Gerar PDF de Códigos de Barras</button>
+        <div id="progressContainer" class="w-full md:w-3/4 lg:w-1/2 mt-4 hidden">
+            <div class="w-full bg-gray-200 rounded-full h-4">
+                <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="progressText" class="text-center mt-2 text-gray-700">0% Concluído (0/0)</p>
+        </div>
+        <div id="preview" class="mt-8 w-full md:w-3/4 lg:w-1/2"></div>
+    </main>
+
+    <!-- Botão WhatsApp Flutuante -->
+    <a href="https://wa.me/5511930089968?text=Ol%C3%A1%2C%20gostaria%20de%20saber%20mais%20sobre%20o%20GCB%20gerador%20de%20c%C3%B3digos%20de%20barras" 
+       class="fixed bottom-20 right-6 bg-green-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-green-600 transition-transform transform hover:scale-110 z-50"
+       target="_blank" rel="noopener noreferrer">
+        <i class="fab fa-whatsapp text-2xl"></i>
+    </a>
+
+    <!-- Rodapé -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p>© 2025 ERICLM. Todos os direitos reservados.</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="sobre.html" class="hover:text-gray-300 transition">Sobre</a>
+                    <a href="privacidade.html" class="hover:text-gray-300 transition">Política de Privacidade</a>
+                    <a href="termos.html" class="hover:text-gray-300 transition">Termos de Uso</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+            return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+            if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+                try {
+                    var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                    var firstSheetName = workbook.SheetNames[0];
+                    var worksheet = workflow.Sheets[firstSheetName];
+                    var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                    var filteredData = jsonData.filter(row => row.some(filledCell));
+                    var headerRowIndex = filteredData.findIndex((row, index) =>
+                        row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                    );
+                    if (headerRowIndex === -1 || headerRowIndex > 25) {
+                        headerRowIndex = 0;
+                    }
+                    var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+                    csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                    return csv;
+                } catch (e) {
+                    console.error(e);
+                    return "";
+                }
+            }
+            return gk_fileData[filename] || "";
+        }
+
+        async function startBarcodeGeneration() {
+            const codesInput = document.getElementById('codesInput').value.trim();
+            let codes = codesInput.split('\n').filter(code => code.trim() !== '');
+
+            if (codes.length === 0) {
+                alert('Por favor, insira pelo menos um número de código de barras no campo.');
+                return;
+            }
+
+            // Show progress bar
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            progressContainer.classList.remove('hidden');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
+            });
+
+            const pageWidth = 210;
+            const pageHeight = 297;
+            const margin = 10;
+            const barcodeWidth = 45;
+            const barcodeHeight = 20;
+            const cols = 4;
+            const rows = 11;
+            const xOffset = (pageWidth - (cols * barcodeWidth)) / (cols + 1);
+            const yOffset = (pageHeight - (rows * barcodeHeight)) / (rows + 1);
+
+            let canvas = document.createElement('canvas');
+            canvas.width = barcodeWidth * 20;
+            canvas.height = barcodeHeight * 20;
+
+            let codeIndex = 0;
+            let pageCount = 0;
+            const totalCodes = codes.length;
+
+            while (codeIndex < totalCodes) {
+                if (pageCount > 0) {
+                    doc.addPage();
+                }
+
+                for (let row = 0; row < rows && codeIndex < totalCodes; row++) {
+                    for (let col = 0; col < cols && codeIndex < totalCodes; col++) {
+                        const code = codes[codeIndex].trim();
+                        try {
+                            JsBarcode(canvas, code, {
+                                format: 'CODE128',
+                                width: 2,
+                                height: 100,
+                                displayValue: true,
+                                fontSize: 12,
+                                margin: 0
+                            });
+
+                            const x = margin + col * (barcodeWidth + xOffset);
+                            const y = margin + row * (barcodeHeight + yOffset);
+                            doc.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, barcodeWidth, barcodeHeight);
+                        } catch (e) {
+                            console.error(`Erro ao gerar código de barras ${code}: ${e}`);
+                        }
+
+                        codeIndex++;
+                        // Update progress bar
+                        const progress = (codeIndex / totalCodes) * 100;
+                        progressBar.style.width = `${progress}%`;
+                        progressText.textContent = `${Math.round(progress)}% Concluído (${codeIndex}/${totalCodes})`;
+                        
+                        // Allow the UI to update by yielding control
+                        if (codeIndex % 100 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 0));
+                        }
+                    }
+                }
+                pageCount++;
+            }
+
+            doc.save('barcodes.pdf');
+            // Reset progress bar
+            progressBar.style.width = '0%';
+            progressText.textContent = `0% Concluído (0/${totalCodes})`;
+            progressContainer.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

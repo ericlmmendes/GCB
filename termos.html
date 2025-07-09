@@ -1,0 +1,92 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Termos de Uso - Gerador de Códigos de Barras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="flex flex-col min-h-screen bg-gray-50">
+    <!-- Cabeçalho -->
+    <header class="w-full bg-gradient-to-r from-blue-700 to-blue-900 text-white py-6 shadow-lg">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div>
+                <img src="https://www.imile.com/images/logos/Christmas_logo_White.svg" alt="Logo" class="h-16 w-auto hover:scale-105 transition-transform">
+            </div>
+            <nav class="space-x-6">
+                <a href="index.html" class="hover:text-gray-200 transition">Home</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="container mx-auto px-4 py-8 flex-grow">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Termos de Uso</h1>
+        <p class="text-gray-600 mb-4">Bem-vindo aos Termos de Uso do Gerador de Códigos de Barras da ERICLM. Ao usar nossa ferramenta, você concorda com os seguintes termos:</p>
+        <ul class="list-disc pl-6 text-gray-600 mb-4">
+            <li>A ferramenta é fornecida "como está", sem garantias de qualquer tipo.</li>
+            <li>Você é responsável pelo uso correto dos códigos de barras gerados.</li>
+            <li>Não nos responsabilizamos por erros ou danos decorrentes do uso da ferramenta.</li>
+            <li>Reservamo-nos o direito de modificar ou descontinuar o serviço a qualquer momento.</li>
+        </ul>
+        <p class="text-gray-600 mb-4">Para dúvidas ou suporte, entre em contato pelo WhatsApp: <a href="https://wa.me/551ഗ
+
+        <li><a href="https://wa.me/5511930089968" class="text-blue-600 hover:underline">+55 11 93008-9968</a>.</p>
+    </main>
+
+    <!-- Rodapé -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <p>© 2025 ERICLM. Todos os direitos reservados.</p>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="sobre.html" class="hover:text-gray-300 transition">Sobre</a>
+                    <a href="privacidade.html" class="hover:text-gray-300 transition">Política de Privacidade</a>
+                    <a href="termos.html" class="hover:text-gray-300 transition">Termos de Uso</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
