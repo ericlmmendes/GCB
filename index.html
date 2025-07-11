@@ -21,7 +21,7 @@
                 var headerRowIndex = filteredData.findIndex((row, index) =>
                   row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
                 );
-                // Cair pra trás
+                // Fallback
                 if (headerRowIndex === -1 || headerRowIndex > 25) {
                   headerRowIndex = 0;
                 }
@@ -42,9 +42,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Códigos de Barras</title>
+    <title>Gerador de Códigos de Barras - GCB</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <style>
+        .completion-message {
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.5s ease-in-out;
+        }
+        .completion-message.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+    </style>
 </head>
 <body class="flex flex-col min-h-screen bg-gray-50">
     <!-- Cabeçalho -->
@@ -63,14 +74,18 @@
 
     <!-- Conteúdo Principal -->
     <main class="container mx-auto px-4 py-8 flex-grow flex flex-col items-center">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">Gerador de Códigos de Barras</h1>
-        <textarea id="codesInput" placeholder="Digite os números dos códigos de barras, um por linha" class="w-full md:w-3/4 lg:w-1/2 h-64 p-4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"></textarea>
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Gerador de Códigos de Barras - GCB</h1>
+        <textarea id="codesInput" placeholder="Digite os números dos códigos de barras, um por linha, Ate 10.000 linhas" class="w-full md:w-3/4 lg:w-1/2 h-64 p-4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"></textarea>
         <button onclick="startBarcodeGeneration()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Gerar PDF de Códigos de Barras</button>
         <div id="progressContainer" class="w-full md:w-3/4 lg:w-1/2 mt-4 hidden">
             <div class="w-full bg-gray-200 rounded-full h-4">
                 <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
             <p id="progressText" class="text-center mt-2 text-gray-700">0% Concluído (0/0)</p>
+        </div>
+        <div id="completionMessage" class="mt-4 text-green-600 font-semibold text-lg completion-message hidden">
+            Processo concluído! Gerando PDF...
+            <i class="fas fa-check-circle ml-2"></i>
         </div>
         <div id="preview" class="mt-8 w-full md:w-3/4 lg:w-1/2"></div>
     </main>
@@ -80,6 +95,20 @@
        class="fixed bottom-20 right-6 bg-green-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-green-600 transition-transform transform hover:scale-110 z-50"
        target="_blank" rel="noopener noreferrer">
         <i class="fab fa-whatsapp text-2xl"></i>
+    </a>
+
+    <!-- Botão Flutuante para Google Sheets -->
+    <a href="https://docs.google.com/spreadsheets/d/1HF92DC0X1301vyquRkgRegQwkcXyPzcdEaAQe3SQEF4/edit#gid=1290737513" 
+    class="fixed bottom-52 right-6 bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-50"
+    target="_blank" rel="noopener noreferrer">
+        <i class="fas fa-truck text-2xl"></i>
+    </a>
+
+    <!-- Botão Flutuante para iMile -->
+    <a href="https://dc.imile.com/#/DCoperation/ScanQueryNew/ScanQueryDeparture" 
+       class="fixed bottom-36 right-6 bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-50"
+       target="_blank" rel="noopener noreferrer">
+        <img src="https://www.imile.com/images/logos/Christmas_logo_White.svg" alt="iMile Logo" class="w-8 h-8">
     </a>
 
     <!-- Rodapé -->
@@ -113,7 +142,7 @@
                 try {
                     var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
                     var firstSheetName = workbook.SheetNames[0];
-                    var worksheet = workflow.Sheets[firstSheetName];
+                    var worksheet = workbook.Sheets[firstSheetName];
                     var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
                     var filteredData = jsonData.filter(row => row.some(filledCell));
                     var headerRowIndex = filteredData.findIndex((row, index) =>
@@ -136,25 +165,19 @@
         async function startBarcodeGeneration() {
             const codesInput = document.getElementById('codesInput').value.trim();
             let codes = codesInput.split('\n').filter(code => code.trim() !== '');
-
             if (codes.length === 0) {
-                alert('Por favor, insira pelo menos um número de código de barras no campo.');
+                alert('Por favor, insira pelo menos um número de código de barras.');
                 return;
             }
 
-            // Mostrar barra de progresso
             const progressContainer = document.getElementById('progressContainer');
             const progressBar = document.getElementById('progressBar');
             const progressText = document.getElementById('progressText');
+            const completionMessage = document.getElementById('completionMessage');
             progressContainer.classList.remove('hidden');
+            completionMessage.classList.add('hidden');
 
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm',
-                format: 'a4'
-            });
-
             const pageWidth = 210;
             const pageHeight = 297;
             const margin = 10;
@@ -164,24 +187,29 @@
             const rows = 11;
             const xOffset = (pageWidth - (cols * barcodeWidth)) / (cols + 1);
             const yOffset = (pageHeight - (rows * barcodeHeight)) / (rows + 1);
+            const codesPerPage = cols * rows;
+            const maxCodesPerFile = 10000; // Limite por PDF
+            const totalCodes = codes.length;
 
+            let doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
             let canvas = document.createElement('canvas');
             canvas.width = barcodeWidth * 20;
             canvas.height = barcodeHeight * 20;
 
             let codeIndex = 0;
+            let fileIndex = 1;
             let pageCount = 0;
-            const totalCodes = codes.length;
 
             while (codeIndex < totalCodes) {
-                if (pageCount > 0) {
-                    doc.addPage();
-                }
+                if (pageCount > 0) doc.addPage();
 
                 for (let row = 0; row < rows && codeIndex < totalCodes; row++) {
                     for (let col = 0; col < cols && codeIndex < totalCodes; col++) {
                         const code = codes[codeIndex].trim();
+
                         try {
+                            const ctx = canvas.getContext('2d');
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
                             JsBarcode(canvas, code, {
                                 format: 'CODE128',
                                 width: 2,
@@ -195,29 +223,50 @@
                             const y = margin + row * (barcodeHeight + yOffset);
                             doc.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, barcodeWidth, barcodeHeight);
                         } catch (e) {
-                            console.error(`Erro ao gerar código de barras ${code}: ${e}`);
+                            console.error(`Erro ao gerar ${code}: ${e}`);
                         }
 
                         codeIndex++;
-                        // Atualizar barra de progresso
+
+                        // Atualiza barra de progresso
                         const progress = (codeIndex / totalCodes) * 100;
                         progressBar.style.width = `${progress}%`;
                         progressText.textContent = `${Math.round(progress)}% Concluído (${codeIndex}/${totalCodes})`;
-                        
-                        // Permitir que a IU seja atualizada cedendo o controle
-                        if (codeIndex % 100 === 0) {
-                            await new Promise(resolve => setTimeout(resolve, 0));
+
+                        // Pequena pausa para não travar
+                        if (codeIndex % 100 === 0) await new Promise(r => setTimeout(r, 10));
+
+                        // Salva PDF e cria novo se atingiu o limite por arquivo
+                        if (codeIndex % maxCodesPerFile === 0 || codeIndex === totalCodes) {
+                            await new Promise(r => setTimeout(r, 50));
+                            doc.save(`codigos_barras_${fileIndex}.pdf`);
+                            fileIndex++;
+                            if (codeIndex < totalCodes) {
+                                doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                                pageCount = 0;
+                            }
                         }
                     }
                 }
+
                 pageCount++;
+                await new Promise(r => setTimeout(r, 30)); // Pausa por página
             }
 
-            doc.save('barcodes.pdf');
-            // Redefinir barra de progresso
+            // Concluído
+            completionMessage.classList.remove('hidden');
+            completionMessage.classList.add('show');
+            progressText.textContent = `100% Concluído!`;
+
+            await new Promise(r => setTimeout(r, 1500));
+            document.getElementById('codesInput').value = '';
             progressBar.style.width = '0%';
             progressText.textContent = `0% Concluído (0/${totalCodes})`;
-            progressContainer.classList.add('hidden');
+            setTimeout(() => {
+                completionMessage.classList.add('hidden');
+                completionMessage.classList.remove('show');
+                progressContainer.classList.add('hidden');
+            }, 2000);
         }
     </script>
 </body>
