@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Converter planilha em JSON para filtrar linhas em branco
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filtrar linhas em branco (linhas onde todas as células estão vazias, nulas ou indefinidas)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heurística para encontrar a linha de cabeçalho ignorando linhas com menos células preenchidas do que a próxima linha
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Converter JSON filtrado de volta para CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Crie uma nova planilha a partir de uma matriz filtrada de matrizes
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -54,6 +15,20 @@
         .completion-message.show {
             opacity: 1;
             transform: scale(1);
+        }
+        .progress-container {
+            position: relative;
+            width: 100%;
+        }
+        .progress-truck {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            transition: left 0.3s ease-in-out;
+            color: #2563EB;
+            font-size: 1.4rem;
+            z-index: 15;
         }
     </style>
 </head>
@@ -75,11 +50,12 @@
     <!-- Conteúdo Principal -->
     <main class="container mx-auto px-4 py-8 flex-grow flex flex-col items-center">
         <h1 class="text-3xl font-bold text-gray-800 mb-6">Gerador de Códigos de Barras - GCB</h1>
-        <textarea id="codesInput" placeholder="Digite os números dos códigos de barras, um por linha, Ate 10.000 linhas" class="w-full md:w-3/4 lg:w-1/2 h-64 p-4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"></textarea>
+        <textarea id="codesInput" placeholder="Digite os números dos códigos de barras, um por linha, Até 10.000 linhas" class="w-full md:w-3/4 lg:w-1/2 h-64 p-4 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"></textarea>
         <button onclick="startBarcodeGeneration()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition shadow-md">Gerar PDF de Códigos de Barras</button>
-        <div id="progressContainer" class="w-full md:w-3/4 lg:w-1/2 mt-4 hidden">
-            <div class="w-full bg-gray-200 rounded-full h-4">
+        <div id="progressContainer" class="w-full md:w-3/4 lg:w-1/2 mt-4 hidden progress-container">
+            <div class="w-full bg-gray-200 rounded-full h-4 relative">
                 <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                <i id="progressTruck" class="fas fa-truck progress-truck"></i>
             </div>
             <p id="progressText" class="text-center mt-2 text-gray-700">0% Concluído (0/0)</p>
         </div>
@@ -99,8 +75,8 @@
 
     <!-- Botão Flutuante para Google Sheets -->
     <a href="https://docs.google.com/spreadsheets/d/1HF92DC0X1301vyquRkgRegQwkcXyPzcdEaAQe3SQEF4/edit#gid=1290737513" 
-    class="fixed bottom-52 right-6 bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-50"
-    target="_blank" rel="noopener noreferrer">
+       class="fixed bottom-52 right-6 bg-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 z-50"
+       target="_blank" rel="noopener noreferrer">
         <i class="fas fa-truck text-2xl"></i>
     </a>
 
@@ -173,38 +149,46 @@
             const progressContainer = document.getElementById('progressContainer');
             const progressBar = document.getElementById('progressBar');
             const progressText = document.getElementById('progressText');
+            const progressTruck = document.getElementById('progressTruck');
             const completionMessage = document.getElementById('completionMessage');
             progressContainer.classList.remove('hidden');
             completionMessage.classList.add('hidden');
 
             const { jsPDF } = window.jspdf;
-            const pageWidth = 210;
-            const pageHeight = 297;
-            const margin = 10;
-            const barcodeWidth = 45;
-            const barcodeHeight = 20;
-            const cols = 4;
-            const rows = 11;
-            const xOffset = (pageWidth - (cols * barcodeWidth)) / (cols + 1);
-            const yOffset = (pageHeight - (rows * barcodeHeight)) / (rows + 1);
-            const codesPerPage = cols * rows;
-            const maxCodesPerFile = 10000; // Limite por PDF
-            const totalCodes = codes.length;
+            const pageWidth = 210; // Largura A4 em mm
+            const pageHeight = 297; // Altura A4 em mm
+            const margin = 10; // Margem de 10 mm em todos os lados
+            const barcodeWidth = 45; // Largura do código de barras em mm
+            const barcodeHeight = 20; // Altura do código de barras em mm
+            const cols = 4; // Número de colunas
+            const rows = 11; // Número de linhas
+            const codesPerPage = cols * rows; // 44 códigos de barras por página
+            const maxCodesPerFile = 10000; // Códigos máximos por PDF
+
+            // Calcular o espaçamento para caber 4 colunas e 11 linhas
+            const totalBarcodeWidth = cols * barcodeWidth; // 4 * 45 = 180mm
+            const availableWidth = pageWidth - 2 * margin; // 210 - 20 = 190mm
+            const xSpacing = (availableWidth - totalBarcodeWidth) / (cols - 1); // (190 - 180) / 3 ≈ 3.33mm
+            const totalBarcodeHeight = rows * barcodeHeight; // 11 * 20 = 220mm
+            const availableHeight = pageHeight - 2 * margin; // 297 - 20 = 277mm
+            const ySpacing = (availableHeight - totalBarcodeHeight) / (rows - 1); // (277 - 220) / 10 = 5.7mm
+            const xStart = margin; // Comece na margem esquerda
+            const yStart = margin; // Comece na margem superior para maximizar o espaço
 
             let doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
             let canvas = document.createElement('canvas');
-            canvas.width = barcodeWidth * 20;
+            canvas.width = barcodeWidth * 20; // Alta resolução para maior clareza
             canvas.height = barcodeHeight * 20;
 
             let codeIndex = 0;
             let fileIndex = 1;
             let pageCount = 0;
 
-            while (codeIndex < totalCodes) {
+            while (codeIndex < codes.length) {
                 if (pageCount > 0) doc.addPage();
 
-                for (let row = 0; row < rows && codeIndex < totalCodes; row++) {
-                    for (let col = 0; col < cols && codeIndex < totalCodes; col++) {
+                for (let row = 0; row < rows && codeIndex < codes.length; row++) {
+                    for (let col = 0; col < cols && codeIndex < codes.length; col++) {
                         const code = codes[codeIndex].trim();
 
                         try {
@@ -219,8 +203,9 @@
                                 margin: 0
                             });
 
-                            const x = margin + col * (barcodeWidth + xOffset);
-                            const y = margin + row * (barcodeHeight + yOffset);
+                            // Calcular posição
+                            const x = xStart + col * (barcodeWidth + xSpacing);
+                            const y = yStart + row * (barcodeHeight + ySpacing);
                             doc.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, barcodeWidth, barcodeHeight);
                         } catch (e) {
                             console.error(`Erro ao gerar ${code}: ${e}`);
@@ -228,20 +213,21 @@
 
                         codeIndex++;
 
-                        // Atualiza barra de progresso
-                        const progress = (codeIndex / totalCodes) * 100;
+                        // Atualizar barra de progresso e posição do caminhão
+                        const progress = (codeIndex / codes.length) * 100;
                         progressBar.style.width = `${progress}%`;
-                        progressText.textContent = `${Math.round(progress)}% Concluído (${codeIndex}/${totalCodes})`;
+                        progressText.textContent = `${Math.round(progress)}% Concluído (${codeIndex}/${codes.length})`;
+                        progressTruck.style.left = `calc(${progress}% - 12px)`; // Ajuste para centralizar o caminhão em andamento
 
-                        // Pequena pausa para não travar
+                        // Pequena pausa para evitar congelamento
                         if (codeIndex % 100 === 0) await new Promise(r => setTimeout(r, 10));
 
-                        // Salva PDF e cria novo se atingiu o limite por arquivo
-                        if (codeIndex % maxCodesPerFile === 0 || codeIndex === totalCodes) {
+                        // Salve o PDF e crie um novo se o limite for atingido
+                        if (codeIndex % maxCodesPerFile === 0 || codeIndex === codes.length) {
                             await new Promise(r => setTimeout(r, 50));
                             doc.save(`codigos_barras_${fileIndex}.pdf`);
                             fileIndex++;
-                            if (codeIndex < totalCodes) {
+                            if (codeIndex < codes.length) {
                                 doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
                                 pageCount = 0;
                             }
@@ -253,15 +239,17 @@
                 await new Promise(r => setTimeout(r, 30)); // Pausa por página
             }
 
-            // Concluído
+            // Completion
             completionMessage.classList.remove('hidden');
             completionMessage.classList.add('show');
             progressText.textContent = `100% Concluído!`;
+            progressTruck.style.left = `calc(100% - 12px)`; // Certifique-se de que o caminhão esteja no final
 
             await new Promise(r => setTimeout(r, 1500));
             document.getElementById('codesInput').value = '';
             progressBar.style.width = '0%';
-            progressText.textContent = `0% Concluído (0/${totalCodes})`;
+            progressText.textContent = `0% Concluído (0/${codes.length})`;
+            progressTruck.style.left = '0';
             setTimeout(() => {
                 completionMessage.classList.add('hidden');
                 completionMessage.classList.remove('show');
